@@ -1,0 +1,120 @@
+# cmake 配置注意
+# project 中的参数是项目名
+# add_executable 中第一个参数是生成文件的名字
+# 配置 cmake 的时候，在项目根目录保留此文件，并且保留空白的 build 文件夹
+# 进入 build 目录，使用 [cmake -G "MinGW Makefiles" ..](MinGw)/[cmake -D_CMAKE_TOOLCHAIN_PREFIX=llvm- ..](Clang/LLVM)
+# 安装 cmake
+# 在 build 目录，使用 make（ MinGW 是 mingw32-make ）构建项目
+# .\生成文件的名字 运行
+
+# # 工程最高源文件目录
+# message("CMAKE_SOURCE_DIR="${CMAKE_SOURCE_DIR})
+# # 当前工程源文件目录（对应的 CmakeList.txt 文件目录）
+# message("CMAKE_CURRENT_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR})
+# # 工程最高二进制文件目录
+# message("CMAKE_BINARY_DIR="${CMAKE_BINARY_DIR})
+# # 当前工程二进制文件目录（对应的 build 目录）
+# message("CMAKE_CURRENT_BINARY_DIR="${CMAKE_CURRENT_BINARY_DIR})
+
+# CMake 最低版本号要求
+cmake_minimum_required (VERSION 3.18.3)
+
+# 指定编译器必须在项目设置前
+# 显式指定使用的 C 编译器
+# set(CMAKE_C_COMPILER "gcc")
+# 显式指定使用的 C++ 编译器 
+set(CMAKE_CXX_COMPILER "g++")
+
+# 使用 C++20
+# add_compile_options(-std=c++2a)
+add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-std=c++2a>)
+add_compile_options($<$<COMPILE_LANGUAGE:C>:-std=c17>)
+
+# 禁用控制台
+# add_link_options(-mwindows)
+# add_link_options(-lmingw32 -lSDL2main -lSDL2)
+
+# 设定 Debug 或 Release 模式
+set(CMAKE_BUILD_TYPE "Debug")
+# set(CMAKE_BUILD_TYPE "Release")
+
+# 使用调试
+# SET(CMAKE_BUILD_TYPE "Debug")  
+# SET(CMAKE_CXX_FLAGS_DEBUG "$ENV{CXXFLAGS} -O0 -Wall -g2 -ggdb")  
+# SET(CMAKE_CXX_FLAGS_RELEASE "$ENV{CXXFLAGS} -O3 -Wall")  
+
+# 项目名称, 若参数值为 Test , 该命令表示项目的名称是 Test
+project(Main)
+
+# 添加头文件目录
+include_directories(GLOB_RECURSE CPP_Header
+    ${CMAKE_CURRENT_SOURCE_DIR}/Lib/Public
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/App/Public
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Main
+    )
+
+# 添加库文件目录
+link_directories(GLOB_RECURSE CPP_Lib
+    ${CMAKE_CURRENT_SOURCE_DIR}/Lib/Library
+    )
+
+# 一次性包含所有 .h、.hpp、.c 和 .cpp 文件（递归查找）
+file(GLOB_RECURSE CPP_SRC
+    # 这个是整个程序的入口
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Main/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Main/*.c"
+
+    # 这里是库头文件对应实现的文件
+    "${CMAKE_CURRENT_SOURCE_DIR}/Lib/Private/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Lib/Private/*.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Lib/Public/*.inl"
+
+    # 接下来是自定义的代码的头文件及实现文件
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/Public/*.hpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/Private/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/Public/*.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/Private/*.c"
+    )
+
+# 设置输出路径变量
+set(CUSTOM_OUTPUT_PATH ${CMAKE_BINARY_DIR}/bin)
+
+# 设置输出路径
+set(EXECUTABLE_OUTPUT_PATH ${CUSTOM_OUTPUT_PATH})
+set(LIBRARY_OUTPUT_PATH ${CUSTOM_OUTPUT_PATH})
+
+# 指定生成目标
+add_executable(Main ${CPP_SRC})
+# 这里是单独包含需要的文件
+# add_executable(test1 main.cpp)
+
+# 链接库
+# ## 链接 GLFW
+# target_link_libraries(Main glfw3)
+# ## 链接 ASSIMP
+# target_link_libraries(Main assimp.dll)
+
+# 删除指定目录
+execute_process(COMMAND ${CMAKE_COMMAND} "-E" "remove_directory" ${CUSTOM_OUTPUT_PATH})
+
+# # 指定要复制的文件
+# file(GLOB_RECURSE EXTRA_RUN_FILE_SRC
+#     # assimp 库的 dll 文件和可执行文件
+#     "${CMAKE_SOURCE_DIR}/Lib/Extra/assimp/*.*"
+#     )
+
+# # 复制文件到可执行文件夹，这个操作只会在源代码发生改变，重新构建 Main 时触发，用于复制一些库依赖文件，它们并不容易变动
+# add_custom_command( TARGET Main POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy ${EXTRA_RUN_FILE_SRC}  ${CUSTOM_OUTPUT_PATH} VERBATIM)
+
+# # 下面两步操作参考链接: https://yngzmiao.blog.csdn.net/article/details/102797448
+
+# 定义一个复制文件夹到可执行文件夹的操作，这里复制的是文件可能经常发生变动文件夹
+add_custom_command(OUTPUT COPY_RES
+    ## 复制 Content 内容文件夹，里面一般会存储各类资源
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Content  ${CUSTOM_OUTPUT_PATH}/Content
+    ## 复制 Config 配置文件夹，里面可能是用到的各类配置
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Config  ${CUSTOM_OUTPUT_PATH}/Config
+    )
+
+# 增加一个没有输出的目标 CopyTask ，这样它将总是被构建。将这个目标依赖于上一步写的复制文件夹操作，那么每次构建，无论源代码是否发生变化，都会执行复制文件夹的操作
+add_custom_target(CopyTask ALL DEPENDS COPY_RES)
